@@ -6,7 +6,7 @@ CREATE TABLE Waitlists(
     waitingClass INT unsigned NOT NULL,
     position Int unsigned NOT NULL,
     date_added DATE NOT NULL,
-    FOREIGN KEY (DropedStudent) REFERENCES Students(student_id),
-    FOREIGN KEY (RelatedClass) REFERENCES classes(class_id),
-    PRIMARY KEY (EnrolledStudent, RelatedClass) 
+    FOREIGN KEY (waitingStudent) REFERENCES Students(student_id),
+    FOREIGN KEY (waitingClass) REFERENCES classes(class_id),
+    PRIMARY KEY (waitingStudent, waitingClass) 
 );

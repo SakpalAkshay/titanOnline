@@ -8,5 +8,5 @@ instructor_name VARCHAR(30) NOT NULL,
 offeredClass INT unsigned NOT NULL, 
 -- named the class id differently to make sense in calling it from this table
 PRIMARY KEY (instructor_id),
-FOREIGN KEY (OfferedClass) REFERENCES classes(class_id)
+FOREIGN KEY (offeredClass) REFERENCES classes(class_id)
 );
