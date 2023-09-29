@@ -1,5 +1,5 @@
 -- worried it need a USE command since my old sql code has it to access the db I believe
-CREATE TABLE instructors{
+CREATE TABLE Instructors{
 instructor_id INT unsigned NOT NULL,
 -- might be able to assign this randomly with out making it (the id)
 instructor_name VARCHAR(30) NOT NULL,
