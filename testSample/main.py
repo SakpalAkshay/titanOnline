@@ -36,8 +36,20 @@ app = FastAPI()
 
 #logging.config.fileConfig(settings.logging_config, disable_existing_loggers=False)
 
+#class Enrollment(BaseModel):
 
-@app.get("/listClasses/")
-def list_books(db: sqlite3.Connection = Depends(get_db)):
+
+
+
+@app.get("/listAllClasses/")
+def listAllClasees(db: sqlite3.Connection = Depends(get_db)):
     classes = db.execute("SELECT * FROM classes")
     return {"classes": classes.fetchall()}
+
+
+
+@app.get("/enrollInClass/{classId}/{sectionNo}")
+def enrollInClass(classId:int, sectionNo:str, db: sqlite3.Connection = Depends(get_db)):
+    classInfo = db.execute("SELECT * FROM classes WHERE section_number=? AND class_id=?",(sectionNo,classId))
+    print(classInfo)
+    return {"data":classInfo.fetchall()}
