@@ -1,4 +1,3 @@
-
 PRAGMA foreign_keys=ON;
 BEGIN TRANSACTION;
 DROP TABLE IF EXISTS instructors;
@@ -14,8 +13,8 @@ FOREIGN KEY (class_id) REFERENCES classes(class_id)
 
 INSERT INTO instructors(instructor_id, instructor_name, class_id)
 VALUES
-    (1, Aileen Johnson,2),
-    (2, Mark Carter,3),
-    (3, Sam Oak,1);
+    (1, "Aileen Johnson",2),
+    (2, "Mark Carter",3),
+    (3, "Sam Oak",1);
     
 COMMIT;
