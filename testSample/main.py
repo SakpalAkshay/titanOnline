@@ -24,11 +24,14 @@ settings = Settings()
 app = FastAPI()
 
 
-
-@app.get("/listAllClasses/")
-def listAllClasees(db: sqlite3.Connection = Depends(get_db)):
-    classes = db.execute("SELECT * FROM classes")
-    return {"classes": classes.fetchall()}
+#List available classes
+@app.get("/listAllClasses/", status_code=200)
+def listAllClasees(db: sqlite3.Connection = Depends(get_db), status_code = 200):
+    try:
+        classes = db.execute("SELECT * FROM classes")
+        return  classes.fetchall()
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 
