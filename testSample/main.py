@@ -105,31 +105,33 @@ def enrollInClass(dataForEnrollment:EnrollmentData, db: sqlite3.Connection = Dep
 
 
 
-
-#Drop a class
 @app.put("/student/dropClass/", status_code=200)
-def dropClass(dataForEnrollment:EnrollmentData, db: sqlite3.Connection = Depends(get_db) ):
+def dropClass(dataForEnrollment:EnrollmentData, db: sqlite3.Connection = Depends(get_db), logger: logging.Logger = Depends(get_logger) ):
+    logger.info("Started Service - Student/DropClass")
     #Implement updating the enrollment table i.e drop student from Enrollment table with some student id and classId
     try:
         enrollmentInfo = db.execute('SELECT * FROM enrollments WHERE student_id = ? AND class_id = ?', (dataForEnrollment.student_id, dataForEnrollment.class_id))
         enrollmentData = enrollmentInfo.fetchone()
         if not enrollmentData:
+            logger.error("Enrollment Doesn't exist for student id : "+ str(dataForEnrollment.student_id)+ " for class id: "+ str(dataForEnrollment.class_id))
             raise HTTPException(status_code=404, detail="Enrollment doesn't exist")
         
         try:
             db.execute('INSERT INTO drops(student_id, class_id) VALUES (?,?)', (dataForEnrollment.student_id, dataForEnrollment.class_id))
-        
+            logger.info('Student Added to dropped table, StudentId: ' + str(dataForEnrollment.student_id))
         except sqlite3.IntegrityError:
+            logger.error("Class has already been dropped")
             raise HTTPException(status_code=400, detail="This class is already droppped")
 
         db.execute('DELETE FROM enrollments WHERE student_id = ? AND class_id = ?', (dataForEnrollment.student_id, dataForEnrollment.class_id))
-    
+        logger.info("Studnet Dropped from enrollments successfully")
         # push one entry from wailtlist to Enrollment if enrollment for that class is not frozen
         classInfo = db.execute('SELECT * FROM classes WHERE class_id = ?', (dataForEnrollment.class_id,))
         classData = classInfo.fetchone()
 
 
         if not classData['is_enrollment_frozen']:
+            logger.info("Pushing entry from waitlist to enrollments")
             #fetch student data whose position is 1 in that class
             studentInfo = db.execute('SELECT * FROM waitlists WHERE class_id =? AND position = ?',(dataForEnrollment.class_id,1))
             studentData = studentInfo.fetchone()
@@ -140,11 +142,14 @@ def dropClass(dataForEnrollment:EnrollmentData, db: sqlite3.Connection = Depends
                 #Update positions of waitlist students
                 db.execute('UPDATE waitlists SET position = position - 1 WHERE class_id = ? AND position > 1', (dataForEnrollment.class_id,))
                 db.commit()
+                logger.info("Student push from waitlist to enrollment: Successful")
                 return {"Info" : "Class Dropped Successfully, student from waitlist got enrolled in Class"}
         db.execute('UPDATE classes SET current_enrollment = current_enrollment - 1 WHERE class_id = ?', (dataForEnrollment.class_id,))   
         db.commit()
+        logger.info("Class classID: "+str(dataForEnrollment.class_id)  +"is dropped for studentID: " + str(dataForEnrollment.student_id))
         return {"Info": "Class dropped successfully"} 
     except sqlite3.IntegrityError:
+        logger.error("Problem in database connection or SQL query")
         raise HTTPException(status_code=500, detail="Internal Server Error")
         
 
