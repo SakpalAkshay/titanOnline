@@ -3,11 +3,11 @@ import sqlite3
 from fastapi import FastAPI, Depends, Response, HTTPException, status
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
-
+import logging.config
 
 class Settings(BaseSettings, env_file=".env", extra="ignore"):
     database: str
-
+    logging_config: str
 
 class EnrollmentData(BaseModel):
     student_id: int
@@ -20,17 +20,23 @@ def get_db():
         db.row_factory = sqlite3.Row
         yield db
 
+def get_logger():
+    return logging.getLogger(__name__)
+
 settings = Settings()
 app = FastAPI()
-
+logging.config.fileConfig(settings.logging_config, disable_existing_loggers=False)
 
 #List available classes
-@app.get("/listAllClasses/", status_code=200)
-def listAllClasees(db: sqlite3.Connection = Depends(get_db), status_code = 200):
+@app.get("/listAllClasses/", status_code=200, )
+def listAllClasees(db: sqlite3.Connection = Depends(get_db), logger: logging.Logger = Depends(get_logger)):
+    logger.info("Started service GET: List All Classes")
     try:
         classes = db.execute("SELECT * FROM classes")
+        logger.info("Class Data Returned successfully")
         return  classes.fetchall()
     except sqlite3.IntegrityError:
+        logger.error("Sqlite3 Integrity Eror, Problem in Connection")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
