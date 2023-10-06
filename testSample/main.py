@@ -42,23 +42,30 @@ def listAllClasees(db: sqlite3.Connection = Depends(get_db), logger: logging.Log
 
 #Attempt to enroll in a class
 @app.put("/student/enrollClass/", status_code=201)
-def enrollInClass(dataForEnrollment:EnrollmentData, db: sqlite3.Connection = Depends(get_db)):
+def enrollInClass(dataForEnrollment:EnrollmentData, db: sqlite3.Connection = Depends(get_db), logger: logging.Logger = Depends(get_logger)):
+    logger.info("Started PUT request - Student/EnrollInClass")
+    logger.info("Recieved Parameters: "+ "Student ID: "+ str(dataForEnrollment.student_id) + " Class ID: " + str(dataForEnrollment.class_id) )
     try:
         classInfo = db.execute("SELECT * FROM classes WHERE class_id=?",(dataForEnrollment.class_id,))
         classData = classInfo.fetchone()
-        
+        logger.info("Fetched Class Data:", classData )
         studentInfo = db.execute("SELECT * FROM students WHERE student_id=?", (dataForEnrollment.student_id,))
         studentData = studentInfo.fetchone()
+        logger.info("Fetched Student Data:", studentData )
         if not classData or not studentData:
+            logger.error("Class or Student Id not found")
             raise HTTPException(status_code=404, detail="Details provided doesn't exist")
         
         if classData['is_enrollment_frozen']:
+            logger.error("Operation Aborted: Enrollment already frozen")
             raise HTTPException(status_code=405, detail="Enrollment Frozen")
        
     #update this if to accomodate pushing into waiting list
         if classData['current_enrollment'] >= classData['max_enrollment']:
             #check if student crossed max waitlist enrollment if they did then raise error
+            logger.info("Class full, pushing student to wailist")
             if (studentData['max_waiting_lists'] >= 3):
+                logger.warn("Operation Aborted: Max Wailist Size full for student")
                 raise HTTPException(status_code=400, detail="Enrollment frozen for current class, max waitlist enrollment reached")
 
             waitlistInfo = db.execute('SELECT COUNT(*) FROM waitlists WHERE class_id=?', (dataForEnrollment.class_id,))
@@ -73,23 +80,31 @@ def enrollInClass(dataForEnrollment:EnrollmentData, db: sqlite3.Connection = Dep
                 db.execute('''INSERT INTO waitlists (student_id, class_id, position, date_added) VALUES (?,?,?, DATE('now'))
                 ''', (dataForEnrollment.student_id, dataForEnrollment.class_id, newPosition))
                 db.commit()
+                logger.info("Student Added to waitlist")
+
                 return {'Info': "Class already full, Entry added to Waiting list Successfully"}
 
             except sqlite3.IntegrityError:
+                logger.error("Student is already in waiting list")
                 raise HTTPException(status_code=400, detail="Enrollment already exist in waiting list")
 
         
         try:   
             db.execute("INSERT INTO enrollments (student_id, class_id) VALUES (?, ?)", (dataForEnrollment.student_id,dataForEnrollment.class_id))
-        
+            logger.info("Entry added to Enrollments")
         except sqlite3.IntegrityError:
+            logger.error("Student is already enrolled")
             raise HTTPException(status_code=400, detail="Enrollment already exist")
         
         db.execute("UPDATE classes SET current_enrollment = current_enrollment + 1 WHERE class_id =?",(dataForEnrollment.class_id,))
         db.commit()
+        logger.info("Student Enrollment is succesfull")
         return {"Info": "Class Enrolled Successfully"}
     except sqlite3.IntegrityError:
-        raise HTTPException(status_code=500, detail="Internal Server Error") 
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+
 
 #Drop a class
 @app.put("/student/dropClass/", status_code=200)
