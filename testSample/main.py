@@ -191,8 +191,65 @@ def dropClass(dataForEnrollment:EnrollmentData, db: sqlite3.Connection = Depends
         return {"Info": "Class dropped successfully"} 
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
+@app.get("/instructor/viewEnrollment/{instructor_id}")
+def viewEnrollment(instructor_id: str, db: sqlite3.Connection = Depends(get_db)) :
+    try:
+        instructorInfo = db.execute('SELECT class_id,current_enrollment FROM classes WHERE instructor_id =?', (instructor_id))
+        instructorData = instructorInfo.fetchall()
+        if not instructorData:
+            raise HTTPException(status_code=404, detail="Details provided doesn't exist")
         
+        return instructorData
+
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+@app.put("/instructor/dropStudent/")
+def dropStudent(dataForEnrollment:EnrollmentData, db: sqlite3.Connection = Depends(get_db) ):
+    #Implement updating the enrollment table i.e drop student from Enrollment table with some student id and classId
+    try:
+        enrollmentInfo = db.execute('SELECT * FROM enrollments WHERE student_id = ? AND class_id = ?', (dataForEnrollment.student_id, dataForEnrollment.class_id))
+        enrollmentData = enrollmentInfo.fetchone()
+        if not enrollmentData:
+            raise HTTPException(status_code=400, detail="Enrollment doesn't exist")
+        db.execute('DELETE FROM enrollments WHERE student_id = ? AND class_id = ?', (dataForEnrollment.student_id, dataForEnrollment.class_id))
+    
+        # push one entry from wailtlist to Enrollment if enrollment for that class is not frozen
+        classInfo = db.execute('SELECT * FROM classes WHERE class_id = ?', (dataForEnrollment.class_id))
+        classData = classInfo.fetchone()
 
 
+        if not classData['is_enrollment_frozen']:
+            #fetch student data whose position is 1 in that class
+            studentInfo = db.execute('SELECT * FROM waitlists WHERE class_id =? AND position = ?',(dataForEnrollment.class_id,1))
+            studentData = studentInfo.fetchone()
+            if studentData:
+                db.execute('INSERT INTO enrollments (student_id, class_id) VALUES (?,?)', (studentData['student_id'], studentData['class_id']))
+                db.execute('DELETE FROM waitlists WHERE class_id =? AND position = ?',(dataForEnrollment.class_id,1))
 
+                #Update positions of waitlist students
+                db.execute('UPDATE waitlists SET position = position - 1 WHERE class_id = ? AND position > 1', (dataForEnrollment.class_id,))
+                db.commit()
+                return {"Info" : "Class Dropped Successfully, student from waitlist got enrolled in Class"}
+        db.execute('UPDATE classes SET current_enrollment = current_enrollment - 1 WHERE class_id = ?', (dataForEnrollment.class_id,))   
+        db.commit()
+        return {"Info": "Class dropped successfully"} 
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
+@app.get("/instructor/viewDroppedStudents/{class_id}")
+def viewDroppedStudents(class_id: str, db:sqlite3.Connection = Depends(get_db)):
+    try:
+        dropListInfo = db.execute('SELECT students.student_id, students.student_name, drops.class_id '
+                                  'FROM drops INNER JOIN students ON drops.student_id = students.student_id '
+                                  'WHERE drops.class_id = ?', (class_id))
+        dropListData = dropListInfo.fetchall()
+        if not dropListData:
+            raise HTTPException(status_code=404, detail="Details provided doesn't exist")
+        
+        return dropListData
+    
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+        
