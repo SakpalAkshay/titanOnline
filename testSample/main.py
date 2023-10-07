@@ -12,6 +12,29 @@ class Settings(BaseSettings, env_file=".env", extra="ignore"):
 class EnrollmentData(BaseModel):
     student_id: int
     class_id: int
+
+class Class(BaseModel):
+    class_id: int
+    department_id: int
+    department_name: str
+    course_code: str
+    section_number: str
+    class_name: str
+    instructor_id: int
+    current_enrollment: int
+    max_enrollment: int
+    is_enrollment_frozen: bool
+    waiting_list_size: int
+
+
+class DeleteSection(BaseModel):
+    class_id: int
+    section_number: str
+
+
+class UpdateInstructor(BaseModel):
+    class_id: int
+    instructor_id: int
    
 
 
@@ -153,3 +176,110 @@ def dropClass(dataForEnrollment:EnrollmentData, db: sqlite3.Connection = Depends
         raise HTTPException(status_code=500, detail="Internal Server Error")
         
 
+@app.post("/addClasseSection", status_code=201)
+def add_class(classes: Class, db: sqlite3.Connection = Depends(get_db)):
+    try:
+
+        # Check to see if class already exists first.
+        q_exists = db.execute(
+            "SELECT * FROM classes WHERE class_id = ?", (classes.class_id,))
+        if q_exists.fetchone():
+            raise HTTPException(
+                status_code=500, detail="Class Already Exists!")
+
+        # Add class section into database.
+        db.execute("INSERT INTO classes VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                   (classes.class_id,
+                    classes.department_id,
+                    classes.department_name,
+                    classes.course_code,
+                    classes.section_number,
+                    classes.class_name,
+                    classes.instructor_id,
+                    classes.current_enrollment,
+                    classes.max_enrollment,
+                    classes.is_enrollment_frozen,
+                    classes.waiting_list_size))
+        db.commit()
+
+        return {"{} Section {} has been added.".format(classes.course_code, classes.section_number)}
+
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+@app.delete("/deleteSection/", status_code=200)
+def delete_section(delete: DeleteSection, db: sqlite3.Connection = Depends(get_db)):
+
+    try:
+        # If class exists, delete from database. Else deny request.
+        q_exists = db.execute(
+            "SELECT * FROM classes WHERE class_id = ?", (delete.class_id,))
+        q_exists = q_exists.fetchone()
+        if q_exists:
+            # Delete from Classes
+            db.execute("DELETE FROM classes WHERE class_id = ? AND section_number = ?",
+                       (delete.class_id, delete.section_number))
+            db.commit()
+
+            # Delete from Enrollment
+            db.execute(
+                "DELETE FROM enrollments WHERE class_id = ?", (delete.class_id,))
+            db.commit()
+
+            # Delete from Waitlist
+            db.execute("DELETE FROM waitlists WHERE class_id = ?",
+                       (delete.class_id,))
+            db.commit()
+
+            # Delete from Drop
+            db.execute("DELETE FROM drops WHERE class_id = ?",
+                       (delete.class_id,))
+            db.commit()
+
+            return {"Class id {} Section {} successfully deleted.".format(q_exists['course_code'], delete.section_number)}
+
+        raise HTTPException(status_code=500, detail="Class does not Exist")
+
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+@app.put("/updateInstructor", status_code=201)
+def update_instructor(update: UpdateInstructor, db: sqlite3.Connection = Depends(get_db)):
+
+    try:
+        # Check for existance of class with that chosen instructor.
+        q_exists = db.execute(
+            "SELECT * FROM classes WHERE class_id = ?", (update.class_id,))
+        q_exists = q_exists.fetchone()
+
+        q_exists_2 = db.execute(
+            "SELECT * FROM instructors WHERE instructor_id = ?", (
+                update.instructor_id,)
+        )
+        q_exists_2 = q_exists_2.fetchone()
+
+        if q_exists and q_exists_2:
+            db.execute("UPDATE classes SET instructor_id = ? WHERE class_id = ?",
+                       (update.instructor_id, update.class_id))
+            db.commit()
+            return {"Class instructor for {} has been updated to {}".format(q_exists["course_code"], q_exists_2["instructor_name"])}
+
+        raise HTTPException(
+            status_code=500, detail="There was a problem with the class or instructor information.")
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+@app.put("/freezeWaitlist/{freeze}", status_code=201)
+def update(freeze: bool, db: sqlite3.Connection = Depends(get_db)):
+    try:
+        db.execute("UPDATE classes SET is_enrollment_frozen = ?", (freeze,))
+        db.commit()
+
+        if freeze:
+            return {"Waitlist Enrollment is now frozen."}
+        return {"Waitlist Enrollment is open"}
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=500, detail="Internal Server Error")
