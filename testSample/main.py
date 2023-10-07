@@ -45,14 +45,14 @@ def listAllClasees(db: sqlite3.Connection = Depends(get_db)):
 
 
 #code to fetch enrolled student based upon student id
-#@app.get("/enrollmentsData/{classId}")
-#def enrollments(classId:int, db: sqlite3.Connection = Depends(get_db)):
+#@app.get("/enrollmentsData/{class_id}")
+#def enrollments(class_id:int, db: sqlite3.Connection = Depends(get_db)):
     #enrolls = db.execute('''SELECT enrollments.*, classes.*, students.*
 #FROM enrollments
 #INNER JOIN classes ON enrollments.class_id = classes.class_id
 #INNER JOIN students ON enrollments.student_id = students.student_id
 #WHERE enrollments.class_id = ?
-#''',(classId,))
+#''',(class_id,))
 #    return  enrolls.fetchall()
 
 @app.put("/student/enrollClass/")
@@ -77,22 +77,29 @@ def enrollInClass(dataForEnrollment:EnrollmentData, db: sqlite3.Connection = Dep
 
             waitlistInfo = db.execute('SELECT COUNT(*) FROM waitlists WHERE class_id=?', (dataForEnrollment.class_id,))
             wlSize = waitlistInfo.fetchone()
+
             if wlSize: #the waitlist doesnt exist and we need to create one
                wailtListSize = wlSize['COUNT(*)'] 
             else:
                 wailtListSize = 0
-            
-            newPosition = wailtListSize + 1
-            try:
-                db.execute('''INSERT INTO waitlists (student_id, class_id, position, date_added) VALUES (?,?,?, DATE('now'))
-                ''', (dataForEnrollment.student_id, dataForEnrollment.class_id, newPosition))
-                db.commit()
-                return {'Info': "Class already full, Entry added to Waiting list Successfully"}
 
-            except sqlite3.IntegrityError:
-                raise HTTPException(status_code=400, detail="Enrollment already exist in waiting list")
 
-        
+            if not wlSize:
+                # Check size of waitlist
+                wlSizeInfo = db.execute('SELECT COUNT(*) FROM waitlists WHERE class_id = ?', (dataForEnrollment.class_id))
+                wailtListSize = wlSizeInfo.fetchone()['COUNT(*)']
+
+                if wailtListSize < 15:
+                    newPosition = wailtListSize + 1
+                    # Add student to wait list
+                    db.execute('''INSERT INTO waitlists (student_id, class_id, position, date_added) VALUES (?,?,?, DATE('now'))
+                    ''', (dataForEnrollment.student_id, dataForEnrollment.class_id, newPosition))
+                    db.commit()
+                    return {'Info': "Class already full, Entry added to Waiting list Successfully"}
+
+                else:
+                    raise HTTPException(status_code=400, detail="Wait list is full for this class")
+
         try:   
             db.execute("INSERT INTO enrollments (student_id, class_id) VALUES (?, ?)", (dataForEnrollment.student_id,dataForEnrollment.class_id))
         
@@ -104,11 +111,57 @@ def enrollInClass(dataForEnrollment:EnrollmentData, db: sqlite3.Connection = Dep
         return {"Info": "Class Enrolled Successfully"}
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+@app.get("/student/waitlist/{class_id}")
+# View position on waiting list
+def waitlistPosition(class_id: int, student_id: int, db: sqlite3.Connection = Depends(get_db)):
+    try:
+        waitinglistInfo = db.execute('SELECT position FROM waitlists WHERE class_id = ? and student_id = ?', (class_id, student_id))
+        positionData = waitinglistInfo.fetchone()
+        # If student is in waitlist return position if not student is not on wait list
+        if positionData:
+            return{"position": positionData['position']}
+        else:
+            return {"position": None}
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+
+@app.delete("/student/removeFromWaitlist/{class_id}")
+# Implementing ability for students to leave waitlist
+def removeFromWaitlist(class_id: int, student_id: int, db: sqlite3.Connection = Depends(get_db)):
+    try:
+        db.execute('DELETE FROM waitlists WHERE class_id = ? AND student_id = ?', (class_id, student_id))
+        db.commit()
+        return {"Info": "Removed from the waiting list successfully"}
+
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+@app.get("/instructor/waitlist/{class_id}")
+# Implementing ability for Instructors to view waitlist
+def viewWaitlist(class_id: int, db: sqlite3.Connection = Depends(get_db)):
+    try:
+        waitlistInfo = db.execute(
+            'SELECT students.student_id, students.student_name, waitlists.position '
+            'FROM waitlists '
+            'INNER JOIN students ON waitlists.student_id = students.student_id '
+            'WHERE waitlists.class_id = ? '
+            'ORDER BY waitlists.date_added ASC',
+            (class_id,)
+        )
+        waitingList = waitlistInfo.fetchall()
+        return {"waitlist": waitingList}
+
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
       
 
 @app.put("/student/dropClass/")
 def dropClass(dataForEnrollment:EnrollmentData, db: sqlite3.Connection = Depends(get_db) ):
-    #Implement updating the enrollment table i.e drop student from Enrollment table with some student id and classId
+    #Implement updating the enrollment table i.e drop student from Enrollment table with some student id and class_id
     try:
         enrollmentInfo = db.execute('SELECT * FROM enrollments WHERE student_id = ? AND class_id = ?', (dataForEnrollment.student_id, dataForEnrollment.class_id))
         enrollmentData = enrollmentInfo.fetchone()
