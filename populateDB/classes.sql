@@ -14,7 +14,8 @@ CREATE TABLE classes (
     current_enrollment INTEGER,
     max_enrollment INTEGER,
     is_enrollment_frozen BOOLEAN,
-    waiting_list_size INTEGER CHECK (waiting_list_size <= 15)
+    waiting_list_size INTEGER CHECK (waiting_list_size <= 15),
+    FOREIGN KEY (instructor_id) REFERENCES instructors(instructor_id)
 );
 
 INSERT INTO classes (department_id, department_name, course_code, section_number, class_name, instructor_id, current_enrollment, max_enrollment, is_enrollment_frozen, waiting_list_size)
