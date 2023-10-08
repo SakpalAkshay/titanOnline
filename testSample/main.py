@@ -375,7 +375,7 @@ def dropStudent(dataForEnrollment: EnrollmentData, db: sqlite3.Connection = Depe
         db.execute('DELETE FROM enrollments WHERE student_id = ? AND class_id = ?',
                    (dataForEnrollment.student_id, dataForEnrollment.class_id))
         # push one entry from wailtlist to Enrollment if enrollment for that class is not frozen
-        classInfo = db.execute('SELECT * FROM classes WHERE class_id = ?', (dataForEnrollment.class_id))
+        classInfo = db.execute('SELECT * FROM classes WHERE class_id = ?', (dataForEnrollment.class_id,))
         classData = classInfo.fetchone()
         if not classData['is_enrollment_frozen']:
             # fetch student data whose position is 1 in that class
